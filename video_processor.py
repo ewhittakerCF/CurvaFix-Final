@@ -237,6 +237,12 @@ class VideoProcessor:
         self.marker_dist_df = pd.DataFrame(
             {
                 "time_s": self.time,
+
+                "posB_x_mm": self.posB_mm[:, 0],
+                "posB_y_mm": self.posB_mm[:, 1],
+                "posR_x_mm": self.posR_mm[:, 0],
+                "posR_y_mm": self.posR_mm[:, 1],
+
                 "dist_net_mm": marker_dist,
                 "dist_x_mm": marker_dist_horiz,
                 "dist_y_mm": marker_dist_vert,
@@ -330,8 +336,70 @@ class VideoProcessor:
             self.process_video()
             self.save_marker_distances()
             self.plot_raw_data()
+            self.plot_marker_positions()
 
         shutil.copy("constants.py", self.data_dir)
+
+    def plot_marker_positions(self):
+        """Plot x and y positions over time for each marker."""
+
+        # Blue marker position plot
+        plt.figure(figsize=(6, 4))
+        plt.plot(
+            self.marker_dist_df["time_s"],
+            self.marker_dist_df["posB_x_mm"],
+            color=CURVAFIX_COLORS[0],
+            label="Blue marker x-position",
+        )
+
+        plt.plot(
+            self.marker_dist_df["time_s"],
+            self.marker_dist_df["posB_y_mm"],
+            color=CURVAFIX_COLORS[1],
+            label="Blue marker y-position",
+        )
+
+        plt.xlabel("Time (s)")
+        plt.ylabel("Blue Marker Position (mm)")
+        plt.legend()
+        plt.tight_layout()
+
+        blue_save_path = os.path.join(
+            self.raw_data_plots_dir,
+            f"posB_xy_vs_time_cycle_{self.cycle_num}.png"
+        )
+
+        plt.savefig(blue_save_path, bbox_inches="tight", dpi=300)
+        plt.close()
+
+        # Red marker position plot
+        plt.figure(figsize=(6, 4))
+        plt.plot(
+            self.marker_dist_df["time_s"],
+            self.marker_dist_df["posR_x_mm"],
+            color=CURVAFIX_COLORS[0],
+            label="Red marker x-position",
+        )
+
+        plt.plot(
+            self.marker_dist_df["time_s"],
+            self.marker_dist_df["posR_y_mm"],
+            color=CURVAFIX_COLORS[1],
+            label="Red marker y-position",
+        )
+
+        plt.xlabel("Time (s)")
+        plt.ylabel("Red Marker Position (mm)")
+        plt.legend()
+        plt.tight_layout()
+
+        red_save_path = os.path.join(
+            self.raw_data_plots_dir,
+            f"posR_xy_vs_time_cycle_{self.cycle_num}.png"
+        )
+
+        plt.savefig(red_save_path, bbox_inches="tight", dpi=300)
+        plt.close()
 
 
 if __name__ == "__main__":

@@ -92,8 +92,6 @@ def run_settling_analysis(data_dir=DATA_DIR):
     processor = VideoProcessor(data_dir=data_dir)
     raw_csv_path = processor.save_settling_raw_marker_distances()
 
-    raw_csv_path = r'G:\.shortcut-targets-by-id\1N6eMHszDLGNamwgRzvzJqe-KKoNW98HP\CurvaFix, Inc\Videos (1)\CurvaFix\Frontal\CurvaFix 0-6k Frontal\settling_analysis\settling_raw_marker_distances.csv'
-
     raw_df = pd.read_csv(raw_csv_path)
     if raw_df.empty:
         raise RuntimeError(f"No raw displacement data found in: {raw_csv_path}")

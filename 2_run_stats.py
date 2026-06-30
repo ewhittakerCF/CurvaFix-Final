@@ -27,7 +27,7 @@ from constants import (
 )
 
 
-DATA_DIR = r"G:\.shortcut-targets-by-id\1N6eMHszDLGNamwgRzvzJqe-KKoNW98HP\CurvaFix, Inc\Videos (1)\CurvaFix 0-10k\CurvaFix 0-6k Frontal"
+DATA_DIR = r"C:\Users\MayaSurve\Box\CurvaFix R&D\Biomechanical Testing\HMC Continuation\June Testing Videos"
 
 
 def summarize_displacement(displacement, approx_frame_rate):
