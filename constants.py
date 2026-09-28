@@ -1,14 +1,14 @@
 import numpy as np
 
-DATA_DIR = r"C:\Users\MayaSurve\Box\CurvaFix R&D\Biomechanical Testing\HMC Continuation\June Testing Videos"
+DATA_DIR = r"C:\Users\MayaSurve\Box\CurvaFix R&D\Biomechanical Testing\HMC Continuation\September Testing\CurvaFix and Straight Screw\Double Leg Stance\Test 135"
 
 # frame widths, in the plane perpendicular to the camera that includes each marker, in centimeters. Adjust with each new camera setup.
 # note: the two should be equal when the red and blue markers are in the same plane (e.g., in the frontal configuration) and should be different when the markers are in a different plane (e.g., in the sagittal configuration).
-FRAME_WIDTH_IN_CM_RED = 28.6
-FRAME_WIDTH_IN_CM_BLUE = 28.6
+FRAME_WIDTH_IN_CM_RED = 21.5
+FRAME_WIDTH_IN_CM_BLUE = 21.5
 
-DEFAULT_VIDEO_START_END = (0, 13) # default start and end times in seconds for videos. Typically left as-is.
-FIRST_VIDEO_START_END = (0, 13) # default start and end times in seconds for first video (which may need to skip settling time)
+DEFAULT_VIDEO_START_END = (4, 45) # default start and end times in seconds for videos. Typically left as-is.
+FIRST_VIDEO_START_END = (4, 45) # default start and end times in seconds for first video (which may need to skip settling time)
 
 # frontal
 HSV_THRESHOLDS = {

@@ -9,6 +9,8 @@ import cv2
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
+from matplotlib.ticker import MultipleLocator
 
 from constants import (
     CURVAFIX_COLORS,
@@ -90,6 +92,93 @@ class VideoProcessor:
                 return (moments["m10"] / moments["m00"], moments["m01"] / moments["m00"])
         return (np.nan, np.nan)
 
+    @staticmethod
+    def get_average_minimum_y_reference(
+        positions_mm,
+        time_s,
+        minimum_distance_seconds=0.5,
+        prominence_mm=0.05,
+    ):
+        """
+        Calculate the average [x, y] marker position at local minimum-y points.
+
+        In image coordinates, smaller y-values are higher in the image.
+
+        Parameters
+        ----------
+        positions_mm : np.ndarray
+            Nx2 array containing [x, y] marker positions in millimeters.
+
+        time_s : np.ndarray
+            Time value corresponding to each marker position.
+
+        minimum_distance_seconds : float
+            Minimum time between detected y minima.
+
+        prominence_mm : float
+            Minimum prominence required for a y minimum to be accepted.
+
+        Returns
+        -------
+        reference_position : np.ndarray
+            Average [x, y] position at the detected minimum-y points.
+
+        minimum_indices : np.ndarray
+            Indices of the detected minimum-y points.
+        """
+
+        if len(positions_mm) == 0:
+            raise ValueError(
+                "Cannot calculate a minimum-y reference from empty position data."
+            )
+
+        if len(positions_mm) != len(time_s):
+            raise ValueError(
+                "positions_mm and time_s must contain the same number of samples."
+            )
+
+        y_position = positions_mm[:, 1]
+
+        if len(time_s) > 1:
+            sample_interval = np.nanmedian(np.diff(time_s))
+
+            if not np.isfinite(sample_interval) or sample_interval <= 0:
+                raise ValueError(
+                    "Cannot determine sample spacing from the time data."
+                )
+
+            samples_per_second = 1.0 / sample_interval
+        else:
+            samples_per_second = 1.0
+
+        minimum_distance_samples = max(
+            1,
+            int(round(
+                minimum_distance_seconds * samples_per_second
+            )),
+        )
+
+        # Multiplying y by -1 converts local minima into peaks.
+        minimum_indices, _ = find_peaks(
+            -y_position,
+            distance=minimum_distance_samples,
+            prominence=prominence_mm,
+        )
+
+        if len(minimum_indices) == 0:
+            raise RuntimeError(
+                "No local minimum-y points were detected. "
+                "Try lowering prominence_mm."
+            )
+
+        # Use the average x and y coordinates at the minimum-y frames.
+        reference_position = np.nanmean(
+            positions_mm[minimum_indices],
+            axis=0,
+        )
+
+        return reference_position, minimum_indices
+    
     def process_video_window(self, video_file, start_time, end_time, roi_coords):
         """
         Process one video over the requested time window and return marker positions.
@@ -200,6 +289,36 @@ class VideoProcessor:
         if not np.any(valid):
             return np.array([], dtype=float), np.array([], dtype=float), np.array([], dtype=float)
 
+        blue_y_px = pos_blue[valid, 1]
+        red_y_px = pos_red[valid, 1]
+
+        blue_y_range_px = np.nanmax(blue_y_px) - np.nanmin(blue_y_px)
+        red_y_range_px = np.nanmax(red_y_px) - np.nanmin(red_y_px)
+
+        print(f"Frame width: {frame_width} px")
+        print(f"Blue scale: {mm_per_pixel_blue:.6f} mm/px")
+        print(f"Red scale: {mm_per_pixel_red:.6f} mm/px")
+
+        print(f"Blue y travel: {blue_y_range_px:.2f} px")
+        print(f"Red y travel: {red_y_range_px:.2f} px")
+
+        print(
+            f"Blue converted travel: "
+            f"{blue_y_range_px * mm_per_pixel_blue:.3f} mm"
+        )
+        print(
+            f"Red converted travel: "
+            f"{red_y_range_px * mm_per_pixel_red:.3f} mm"
+        )
+
+        print(
+            f"Expected pixel travel for 2.54 mm, blue: "
+            f"{2.54 / mm_per_pixel_blue:.2f} px"
+        )
+        print(
+            f"Expected pixel travel for 2.54 mm, red: "
+            f"{2.54 / mm_per_pixel_red:.2f} px"
+        )
         pos_blue = pos_blue[valid] * mm_per_pixel_blue
         pos_red = pos_red[valid] * mm_per_pixel_red
         time = np.arange(len(pos_blue), dtype=float) / fps + start_time
@@ -229,10 +348,61 @@ class VideoProcessor:
 
     def save_marker_distances(self, marker_dist_df_save_path=None):
         marker_gap_vectors = self.posR_mm - self.posB_mm
-
         marker_dist = np.linalg.norm(marker_gap_vectors, axis=1)
         marker_dist_horiz = marker_gap_vectors[:, 0]
         marker_dist_vert = marker_gap_vectors[:, 1]
+
+        if self.cycle_num == "baseline":
+            # The baseline segment is only 1 second and should be approximately
+            # stationary, so there may be no cyclic minima to detect.
+            posB_reference = np.nanmean(self.posB_mm, axis=0)
+            posR_reference = np.nanmean(self.posR_mm, axis=0)
+
+            posB_minimum_indices = np.array([], dtype=int)
+            posR_minimum_indices = np.array([], dtype=int)
+
+        else:
+            # For actual loading-cycle videos, use the average position at
+            # detected local minimum-y points.
+            posB_reference, posB_minimum_indices = (
+            self.get_average_minimum_y_reference(
+            positions_mm=self.posB_mm,
+            time_s=self.time,
+            minimum_distance_seconds=0.5,
+            prominence_mm=0.05,
+        )
+    )
+
+        posR_reference, posR_minimum_indices = (
+        self.get_average_minimum_y_reference(
+            positions_mm=self.posR_mm,
+            time_s=self.time,
+            minimum_distance_seconds=0.5,
+            prominence_mm=0.05,
+        )
+    )
+
+        # Calculate displacement relative to the chosen reference
+        posB_displacement = self.posB_mm - posB_reference
+        posR_displacement = self.posR_mm - posR_reference
+
+        # Displacement relative to each marker's average minimum-y position.
+        posB_displacement = self.posB_mm - posB_reference
+        posR_displacement = self.posR_mm - posR_reference
+
+        print(
+            f"Blue reference: "
+            f"x={posB_reference[0]:.3f} mm, "
+            f"y={posB_reference[1]:.3f} mm; "
+            f"detected minima={len(posB_minimum_indices)}"
+        )
+
+        print(
+            f"Red reference: "
+            f"x={posR_reference[0]:.3f} mm, "
+            f"y={posR_reference[1]:.3f} mm; "
+            f"detected minima={len(posR_minimum_indices)}"
+        )
 
         self.marker_dist_df = pd.DataFrame(
             {
@@ -242,6 +412,11 @@ class VideoProcessor:
                 "posB_y_mm": self.posB_mm[:, 1],
                 "posR_x_mm": self.posR_mm[:, 0],
                 "posR_y_mm": self.posR_mm[:, 1],
+
+                "dispB_x_mm": posB_displacement[:, 0],
+                "dispB_y_mm": posB_displacement[:, 1],
+                "dispR_x_mm": posR_displacement[:, 0],
+                "dispR_y_mm": posR_displacement[:, 1],
 
                 "dist_net_mm": marker_dist,
                 "dist_x_mm": marker_dist_horiz,
@@ -336,70 +511,110 @@ class VideoProcessor:
             self.process_video()
             self.save_marker_distances()
             self.plot_raw_data()
-            self.plot_marker_positions()
+            self.plot_marker_displacements()
 
         shutil.copy("constants.py", self.data_dir)
 
-    def plot_marker_positions(self):
-        """Plot x and y positions over time for each marker."""
+    def plot_marker_displacements(self):
+        """Plot x and y displacement over time for each marker."""
 
-        # Blue marker position plot
+        # Blue marker displacement plot
         plt.figure(figsize=(6, 4))
+
         plt.plot(
             self.marker_dist_df["time_s"],
-            self.marker_dist_df["posB_x_mm"],
+            self.marker_dist_df["dispB_x_mm"],
             color=CURVAFIX_COLORS[0],
-            label="Blue marker x-position",
+            label="X displacement",
         )
 
         plt.plot(
             self.marker_dist_df["time_s"],
-            self.marker_dist_df["posB_y_mm"],
+            self.marker_dist_df["dispB_y_mm"],
             color=CURVAFIX_COLORS[1],
-            label="Blue marker y-position",
+            label="Y displacement",
+        )
+
+        plt.axhline(
+            y=0,
+            linewidth=0.8,
+            color="black",
+            alpha=0.5,
         )
 
         plt.xlabel("Time (s)")
-        plt.ylabel("Blue Marker Position (mm)")
+        plt.ylabel("Blue Marker Displacement (mm)")
+        plt.title(f"Blue Marker Displacement — Cycle {self.cycle_num}")
         plt.legend()
+
+        ax = plt.gca()
+        ax.yaxis.set_major_locator(MultipleLocator(0.25))
+
+        plt.grid(True, alpha=0.3)
         plt.tight_layout()
 
         blue_save_path = os.path.join(
             self.raw_data_plots_dir,
-            f"posB_xy_vs_time_cycle_{self.cycle_num}.png"
+            f"dispB_xy_vs_time_cycle_{self.cycle_num}.png",
         )
 
-        plt.savefig(blue_save_path, bbox_inches="tight", dpi=300)
+        plt.savefig(
+            blue_save_path,
+            bbox_inches="tight",
+            dpi=300,
+        )
         plt.close()
 
-        # Red marker position plot
+        print(f"Saved blue marker displacement plot to: {blue_save_path}")
+
+        # Red marker displacement plot
         plt.figure(figsize=(6, 4))
+
         plt.plot(
             self.marker_dist_df["time_s"],
-            self.marker_dist_df["posR_x_mm"],
+            self.marker_dist_df["dispR_x_mm"],
             color=CURVAFIX_COLORS[0],
-            label="Red marker x-position",
+            label="X displacement",
         )
 
         plt.plot(
             self.marker_dist_df["time_s"],
-            self.marker_dist_df["posR_y_mm"],
+            self.marker_dist_df["dispR_y_mm"],
             color=CURVAFIX_COLORS[1],
-            label="Red marker y-position",
+            label="Y displacement",
+        )
+
+        plt.axhline(
+            y=0,
+            linewidth=0.8,
+            color="black",
+            alpha=0.5,
         )
 
         plt.xlabel("Time (s)")
-        plt.ylabel("Red Marker Position (mm)")
+        plt.ylabel("Red Marker Displacement (mm)")
+        plt.title(f"Red Marker Displacement — Cycle {self.cycle_num}")
         plt.legend()
+
+        ax = plt.gca()
+        ax.yaxis.set_major_locator(MultipleLocator(0.25))
+
+        plt.grid(True, alpha=0.3)
         plt.tight_layout()
 
         red_save_path = os.path.join(
             self.raw_data_plots_dir,
-            f"posR_xy_vs_time_cycle_{self.cycle_num}.png"
+            f"dispR_xy_vs_time_cycle_{self.cycle_num}.png",
         )
 
-        plt.savefig(red_save_path, bbox_inches="tight", dpi=300)
+        plt.savefig(
+            red_save_path,
+            bbox_inches="tight",
+            dpi=300,
+        )
         plt.close()
+
+        print(f"Saved red marker displacement plot to: {red_save_path}")
 
 
 if __name__ == "__main__":

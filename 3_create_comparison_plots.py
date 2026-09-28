@@ -15,14 +15,14 @@ from constants import CURVAFIX_COLORS
 
 
 # user-defined constants
-VIDEO_DIR = r'G:\.shortcut-targets-by-id\1N6eMHszDLGNamwgRzvzJqe-KKoNW98HP\CurvaFix, Inc\Videos (1)'
+VIDEO_DIR = r'C:\Users\MayaSurve\Box\CurvaFix R&D\Biomechanical Testing\HMC Continuation\September Testing\CurvaFix and Straight Screw\Double Leg Stance\Test 135'
 
 RUNS_TO_COMPARE = { # directories should contain displacement_summary csvs
     'CurvaFix Implant': r'CurvaFix\Frontal\concat',
     'Traditional Plate': r'Plate\Frontal\concat',
 }
 
-SAVE_DIR = r'G:\.shortcut-targets-by-id\1N6eMHszDLGNamwgRzvzJqe-KKoNW98HP\CurvaFix, Inc\Videos (1)\curvafix_v_plate_30k'
+SAVE_DIR = r'C:\Users\MayaSurve\Box\CurvaFix R&D\Biomechanical Testing\HMC Continuation\September Testing\CurvaFix and Straight Screw\Double Leg Stance\Test 65\comparison_plots'
 os.makedirs(SAVE_DIR)
 
 
